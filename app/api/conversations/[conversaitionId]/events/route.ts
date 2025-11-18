@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
-import { addConnection, removeConnection } from "@/app/api/messages/route";
 import { currentUser } from "@/lib/auth";
+import { addConnection, removeConnection } from "@/lib/connections";
 
 export async function GET(request: NextRequest) {
     const user = await currentUser();
