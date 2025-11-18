@@ -1,0 +1,485 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+model User {
+  id                    String                 @id @default(cuid())
+  name                  String?
+  surname               String?
+  birth                 DateTime?
+  country               String?                @default("India")
+  city                  String?
+  email                 String?                @unique
+  emailVerified         DateTime?
+  image                 Image?
+  isImageApproved       String                 @default("none")
+  password              String?
+  role                  UserRole               @default(USER)
+  accounts              Account[]
+  isTwoFactorEnabled    Boolean                @default(false)
+  isBlocked             Boolean                @default(false)
+  isChatBlocked         Boolean                @default(false)
+  twoFactorConfirmation TwoFactorConfirmation?
+  transactions          Transaction[]
+
+  conversations Conversation[]
+  messages      Message[]
+
+  books Book[]
+  bets  Bet[]
+
+  userPromoCodes UserPromoCode[]
+  bonuses        Bonus[]
+
+  assignedPromoCodes PromoCode[]         @relation("AssignedPromoCodes")
+  influencerEarnings InfluencerEarning[] @relation("InfluencerEarnings")
+  sourceEarnings     InfluencerEarning[] @relation("SourceUserEarnings")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Image {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model VerificationToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+
+  @@unique([email, token])
+}
+
+model PasswordResetToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+
+  @@unique([email, token])
+}
+
+model TwoFactorToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+
+  @@unique([email, token])
+}
+
+model TwoFactorConfirmation {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+}
+
+enum TransactionType {
+  deposit
+  withdrawal
+}
+
+enum TransactionStatus {
+  success
+  pending
+  fail
+}
+
+model Transaction {
+  id          String               @id @default(uuid())
+  type        TransactionType
+  amount      Decimal
+  status      TransactionStatus
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  description String?
+  category    String?
+  history     TransactionHistory[]
+  bets        Bet[]
+
+  bonus       Bonus?               @relation(fields: [bonusId], references: [id])
+  bonusId     String?              @unique
+
+  userId            String
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  InfluencerEarning InfluencerEarning[]
+
+  @@index([userId])
+}
+
+model TransactionHistory {
+  id        String            @id @default(uuid())
+  status    TransactionStatus
+  note      String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+}
+
+model Conversation {
+  id            String   @id @default(uuid())
+  topic         String?
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  messageIds String[]
+  messages   Message[]
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  body      String?
+  image     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversatioId String
+  conversation  Conversation @relation(fields: [conversatioId], references: [id])
+
+  userId String
+  sender User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  isReadByAdmin Boolean @default(false)
+  isReadByUser  Boolean @default(false)
+
+  @@index([userId])
+}
+
+enum BookStatus {
+  ACTIVE
+  INACTIVE
+  SETTLED
+  CANCELLED
+}
+
+enum EventStatus {
+  UPCOMING
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum OutcomeResult {
+  WIN
+  LOSE
+  VOID
+  PENDING
+}
+
+model Book {
+  id          String     @id @default(uuid())
+  title       String
+  description String?
+  status      BookStatus @default(ACTIVE)
+  date        DateTime
+  category    String
+  image       String?
+  championship    String?
+  country         String?
+  isHotEvent      Boolean  @default(false)
+  isNationalSport Boolean  @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  events Event[]
+  bets   Bet[]
+  teams  Team[]  @relation("BookTeams")
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Event {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  status      EventStatus @default(UPCOMING)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  outcomes Outcome[]
+  bets     Bet[]
+
+  bookId String
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  homeTeamId String?
+  homeTeam   Team?   @relation("HomeTeam", fields: [homeTeamId], references: [id])
+
+  awayTeamId String?
+  awayTeam   Team?   @relation("AwayTeam", fields: [awayTeamId], references: [id])
+
+  isFirstFastOption  Boolean @default(false)
+  isSecondFastOption Boolean @default(false)
+
+  @@index([bookId])
+}
+
+model Outcome {
+  id          String         @id @default(uuid())
+  name        String
+  odds        Float
+  probability Float
+  stake       Float          @default(0)
+  result      OutcomeResult? @default(PENDING)
+  order       Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  bets Bet[]
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+}
+
+enum BetStatus {
+  PENDING
+  WON
+  LOST
+  VOID
+  CANCELLED
+}
+
+model Bet {
+  id           String    @id @default(uuid())
+  amount       Float
+  potentialWin Float
+  status       BetStatus @default(PENDING)
+  odds         Float
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  settledAt    DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bookId String
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  outcomeId String
+  outcome   Outcome @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+
+  transactionId String?      @unique
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([userId])
+  @@index([bookId])
+  @@index([eventId])
+  @@index([outcomeId])
+}
+
+model Team {
+  id        String   @id @default(uuid())
+  name      String
+  image     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  homeEvents Event[] @relation("HomeTeam")
+  awayEvents Event[] @relation("AwayTeam")
+
+  bookId String?
+  book   Book?   @relation("BookTeams", fields: [bookId], references: [id])
+
+  @@index([bookId])
+}
+
+enum PromoCodeType {
+  DEPOSIT_BONUS
+  FREE_SPINS
+  CASHBACK
+  FREE_BET
+  COMBINED
+}
+
+enum PromoCodeStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+}
+
+enum BonusStatus {
+  PENDING_ACTIVATION
+  PENDING_WAGERING
+  COMPLETED
+  FORFEITED
+  EXPIRED
+}
+
+model PromoCode {
+  id          String        @id @default(uuid())
+  code        String        @unique
+  type        PromoCodeType
+  description String?
+
+  bonusPercentage    Int?
+  maxBonusAmount     Decimal?
+  minDepositAmount   Decimal?
+  freeSpinsCount     Int?
+  freeSpinsGame      String?
+  cashbackPercentage Int?
+
+  wageringRequirement Int?
+  gameWeighting       Json?
+
+  maxUses      Int?
+  usesPerUser  Int?            @default(1)
+  currentUses  Int             @default(0)
+  startDate    DateTime
+  endDate      DateTime?
+  status       PromoCodeStatus @default(ACTIVE)
+  isOneTimeUse Boolean         @default(true)
+
+  assignedUserId       String?
+  assignedUser         User?   @relation("AssignedPromoCodes", fields: [assignedUserId], references: [id])
+  commissionPercentage Float?  @default(1.0)
+
+  userPromoCodes     UserPromoCode[]
+  bonuses            Bonus[]
+  influencerEarnings InfluencerEarning[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code, status])
+  @@index([assignedUserId])
+}
+
+model UserPromoCode {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  promoCodeId String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+
+  timesUsed  Int       @default(0)
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, promoCodeId])
+  @@index([userId])
+  @@index([promoCodeId])
+}
+
+model Bonus {
+  id                    String        @id @default(uuid())
+  amount                Decimal
+  bonusAmount           Decimal
+  remainingAmount       Decimal
+  wageringRequirement   Int
+  completedWagering     Decimal       @default(0)
+  totalWagered          Decimal       @default(0)
+  withdrawnAmount       Decimal       @default(0)
+  
+  type                  PromoCodeType
+  status                BonusStatus   @default(PENDING_ACTIVATION)
+
+  transaction           Transaction?
+  
+  userId                String
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  promoCodeId           String?
+  promoCode             PromoCode?    @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
+
+  freeSpinsCount        Int?
+  freeSpinsUsed         Int?          @default(0)
+  freeSpinsGame         String?
+  freeSpinsWinnings     Decimal?      @default(0)
+  cashbackPercentage    Int?
+  
+  expiresAt             DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  activatedAt           DateTime?
+}
+
+model InfluencerEarning {
+  id          String  @id @default(uuid())
+  amount      Decimal
+  description String
+  type        String  @default("WITHDRAWAL_COMMISSION")
+
+  influencerId String
+  influencer   User   @relation("InfluencerEarnings", fields: [influencerId], references: [id], onDelete: Cascade)
+
+  sourceUserId String
+  sourceUser   User   @relation("SourceUserEarnings", fields: [sourceUserId], references: [id], onDelete: Cascade)
+
+  withdrawalId String?
+  withdrawal   Transaction? @relation(fields: [withdrawalId], references: [id])
+
+  promoCodeId String?
+  promoCode   PromoCode? @relation(fields: [promoCodeId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([influencerId])
+  @@index([sourceUserId])
+  @@index([withdrawalId])
+  @@index([promoCodeId])
+}
