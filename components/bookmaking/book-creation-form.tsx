@@ -8,12 +8,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, AlertCircle, Users, Calendar, Loader2, Zap, Search, ArrowUp, ArrowDown, Flag, Trophy, Flame, Globe } from 'lucide-react'
+import { Plus, Trash2, AlertCircle, Users, Calendar, Loader2, ArrowUp, ArrowDown, Flag, Trophy, Flame, Globe, Link as LinkIcon } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 
 const CATEGORIES = [
@@ -44,45 +43,6 @@ const COUNTRIES = [
   'Ukraine', 'Belarus', 'Kazakhstan', 'Uzbekistan', 'Azerbaijan', 'Georgia', 'Armenia', 'Other'
 ]
 
-const CHAMPIONSHIPS = [
-  'Olympic Games',
-  'FIFA World Cup',
-  'Cricket World Cup',
-  'UEFA Champions League',
-  'English Premier League',
-  'Indian Premier League (IPL)',
-  'T20 World Cup',
-  'Commonwealth Games',
-  'Asian Games',
-  'Euro Cup',
-  'Copa America',
-  'Africa Cup of Nations',
-  'NBA Championships',
-  'Wimbledon',
-  'US Open',
-  'French Open',
-  'Australian Open',
-  'World Athletics Championships',
-  'World Swimming Championships',
-  'World Boxing Championships',
-  'UFC Championships',
-  'World Esports Championships',
-  'Other'
-]
-
-const SPORTS_API_MAPPING = {
-  'Cricket': 'cricket',
-  'Football': 'football',
-  'Kabaddi': 'kabaddi',
-  'Tennis': 'tennis',
-  'Hockey': 'hockey',
-  'Badminton': 'badminton',
-  'Basketball': 'basketball',
-  'Boxing': 'boxing',
-  'MMA': 'mma',
-  'Esports': 'esports'
-}
-
 interface TeamForm {
   name: string
   image: string
@@ -110,7 +70,6 @@ export default function BookCreationForm() {
   const [image, setImage] = useState('')
   const [description, setDescription] = useState('')
   const [championship, setChampionship] = useState('')
-  const [customChampionship, setCustomChampionship] = useState('')
   const [country, setCountry] = useState('')
   const [isHotEvent, setIsHotEvent] = useState(false)
   const [isNationalSport, setIsNationalSport] = useState(false)
@@ -126,89 +85,54 @@ export default function BookCreationForm() {
     }
   ])
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [useAutomation, setUseAutomation] = useState(true)
-  const [isSearching, setIsSearching] = useState(false)
-  const [tournamentFilter, setTournamentFilter] = useState('')
-  const [foundEvents, setFoundEvents] = useState<any[]>([])
-  const [selectedEvent, setSelectedEvent] = useState<any>(null)
 
-  const searchAutomatedEvents = async () => {
-    if (!category) {
-      toast.error('Please select a category first')
+  // State for Parimatch URL import
+  const [fetchUrl, setFetchUrl] = useState('')
+  const [isFetching, setIsFetching] = useState(false)
+
+  // Fetch from Parimatch URL
+  const fetchFromUrl = async () => {
+    if (!fetchUrl.trim()) {
+      toast.error('Please enter a Parimatch event URL')
       return
     }
 
-    setIsSearching(true)
+    setIsFetching(true)
     try {
-      const sportKey = SPORTS_API_MAPPING[category as keyof typeof SPORTS_API_MAPPING] || 'soccer'
-      
-      const response = await fetch('/api/admin/bookmaking/auto-create', {
+      const response = await fetch('/api/admin/bookmaking/fetch-from-url', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-search-only': 'true'
-        },
-        body: JSON.stringify({
-          sport: sportKey,
-          tournament: tournamentFilter,
-          autoCreateMultiple: false
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: fetchUrl })
       })
 
       const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Fetch failed')
+
+      // Populate form – startTime is already in local YYYY-MM-DDThh:mm format
+      setTitle(data.title || '')
+      setDate(data.startTime || '')
+      setCategory(data.category || 'Cricket')
+      setImage(data.bookImage || '')
+      setDescription(data.description || '')
+      setChampionship(data.championship || '')
+      setCountry(data.country || '')
       
-      if (response.ok) {
-        setFoundEvents(data.results || [])
-        if (data.results && data.results.length > 0) {
-          toast.success(`Found ${data.results.length} real events with odds`)
-        } else {
-          toast.info('No events found. Try a different sport.')
-        }
-      } else {
-        throw new Error(data.error || 'Failed to fetch events')
+      if (data.teams && data.teams.length >= 2) {
+        setTeams(data.teams.map((t: any) => ({ name: t.name, image: t.image || '' })))
       }
-    } catch (error: any) {
-      console.error('Error:', error)
-      toast.error(error.message || 'Check your API key and try again')
+      
+      if (data.events && data.events.length) {
+        setEvents(data.events)
+      }
+      
+      toast.success('Event data loaded successfully!')
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err.message || 'Failed to fetch from URL')
     } finally {
-      setIsSearching(false)
+      setIsFetching(false)
     }
   }
-
-  const loadEventData = (eventData: any) => {
-    setSelectedEvent(eventData);
-    
-    setTitle(eventData.title || `${eventData.homeTeam} vs ${eventData.awayTeam}`);
-    setDate(new Date(eventData.startTime).toISOString().slice(0, 16));
-    setCategory(eventData.category || category);
-    setImage(eventData.bookImage || '');
-    
-    setTeams([
-      { 
-        name: eventData.homeTeam, 
-        image: eventData.homeTeamImage || '' 
-      },
-      { 
-        name: eventData.awayTeam, 
-        image: eventData.awayTeamImage || '' 
-      }
-    ]);
-    
-    const formattedEvents = eventData.markets.map((market: any, index: number) => ({
-      name: market.name,
-      isFirstFastOption: index === 0,
-      isSecondFastOption: index === 1,
-      outcomes: market.outcomes.map((outcome: any, outcomeIndex: number) => ({
-        name: outcome.name,
-        odds: outcome.odds,
-        order: outcomeIndex
-      }))
-    }));
-    
-    setEvents(formattedEvents);
-    
-    toast.success('Event data loaded successfully!');
-  };
 
   const addTeam = () => {
     setTeams([...teams, { name: '', image: '' }])
@@ -238,11 +162,9 @@ export default function BookCreationForm() {
   const removeEvent = (index: number) => {
     if (events.length > 1) {
       const updatedEvents = events.filter((_, i) => i !== index)
-      
       if (index === 0 && events[0].isFirstFastOption && updatedEvents.length > 0) {
         updatedEvents[0].isFirstFastOption = true
       }
-      
       setEvents(updatedEvents)
     }
   }
@@ -252,17 +174,13 @@ export default function BookCreationForm() {
     
     if (field === 'isFirstFastOption' && value === true) {
       updatedEvents.forEach((event, i) => {
-        if (i !== index) {
-          event.isFirstFastOption = false
-        }
+        if (i !== index) event.isFirstFastOption = false
       })
     }
     
     if (field === 'isSecondFastOption' && value === true) {
       updatedEvents.forEach((event, i) => {
-        if (i !== index) {
-          event.isSecondFastOption = false
-        }
+        if (i !== index) event.isSecondFastOption = false
       })
     }
     
@@ -291,8 +209,8 @@ export default function BookCreationForm() {
       updatedEvents[eventIndex].outcomes = updatedEvents[eventIndex].outcomes.filter(
         (_, i) => i !== outcomeIndex
       )
-      updatedEvents[eventIndex].outcomes.forEach((outcome, index) => {
-        outcome.order = index
+      updatedEvents[eventIndex].outcomes.forEach((outcome, idx) => {
+        outcome.order = idx
       })
       setEvents(updatedEvents)
     }
@@ -314,32 +232,16 @@ export default function BookCreationForm() {
     if (direction === 'up' && outcomeIndex > 0) {
       [outcomes[outcomeIndex], outcomes[outcomeIndex - 1]] = 
       [outcomes[outcomeIndex - 1], outcomes[outcomeIndex]]
-      
-      outcomes.forEach((outcome, index) => {
-        outcome.order = index
-      })
+      outcomes.forEach((outcome, idx) => { outcome.order = idx })
     } else if (direction === 'down' && outcomeIndex < outcomes.length - 1) {
       [outcomes[outcomeIndex], outcomes[outcomeIndex + 1]] = 
       [outcomes[outcomeIndex + 1], outcomes[outcomeIndex]]
-      
-      outcomes.forEach((outcome, index) => {
-        outcome.order = index
-      })
+      outcomes.forEach((outcome, idx) => { outcome.order = idx })
     }
-    
     setEvents(updatedEvents)
   }
 
-  const getValidTeams = () => {
-    return teams.filter(team => team.name.trim() !== '')
-  }
-
-  const getFinalChampionship = () => {
-    if (championship === 'Other' && customChampionship.trim()) {
-      return customChampionship.trim()
-    }
-    return championship
-  }
+  const getValidTeams = () => teams.filter(team => team.name.trim() !== '')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -393,16 +295,14 @@ export default function BookCreationForm() {
     try {
       const response = await fetch('/api/admin/bookmaking/books', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
           date,
           category,
           image: image || null,
           description: description || null,
-          championship: getFinalChampionship() || null,
+          championship: championship || null,
           country: country || null,
           isHotEvent,
           isNationalSport,
@@ -420,13 +320,13 @@ export default function BookCreationForm() {
       const data = await response.json()
 
       if (response.ok) {
+        // Reset form
         setTitle('')
         setDate('')
         setCategory('')
         setImage('')
         setDescription('')
         setChampionship('')
-        setCustomChampionship('')
         setCountry('')
         setIsHotEvent(false)
         setIsNationalSport(false)
@@ -439,7 +339,6 @@ export default function BookCreationForm() {
         }])
         
         toast.success("Book created successfully!")
-
         router.push('/')
       } else {
         throw new Error(data.error || 'Failed to create book')
@@ -459,106 +358,34 @@ export default function BookCreationForm() {
   return (
     <div className="px-4 py-8">
       <form onSubmit={handleSubmit} className="space-y-8">
+        {/* Import from Parimatch URL Card */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Search className="h-5 w-5" />
-              Find Events Automatically
+              <LinkIcon className="h-5 w-5" />
+              Import from Parimatch URL
             </CardTitle>
+            <CardDescription>
+              Paste a Parimatch event link to auto‑fill teams, match details and odds
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Sport Category</Label>
-                <Select value={category} onValueChange={setCategory} disabled={isSearching}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select sport" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map(cat => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Tournament (Optional)</Label>
-                <Input
-                  value={tournamentFilter}
-                  onChange={(e) => setTournamentFilter(e.target.value)}
-                  placeholder="e.g., Premier League, NBA"
-                  disabled={isSearching}
-                />
-              </div>
-              
-              <div className="space-y-2 flex items-end">
-                <Button
-                  type="button"
-                  onClick={searchAutomatedEvents}
-                  disabled={!category || isSearching}
-                  className="w-full"
-                >
-                  {isSearching ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Searching...
-                    </>
-                  ) : (
-                    <>
-                      <Search className="h-4 w-4 mr-2" />
-                      Search Events
-                    </>
-                  )}
-                </Button>
-              </div>
+            <div className="flex gap-4">
+              <Input
+                placeholder="https://pm-betting.com/en/events/rajasthan-royals-mumbai-indians-16023514"
+                value={fetchUrl}
+                onChange={(e) => setFetchUrl(e.target.value)}
+                disabled={isFetching}
+                className="flex-1"
+              />
+              <Button onClick={fetchFromUrl} disabled={isFetching} type="button">
+                {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Fetch & Fill'}
+              </Button>
             </div>
-
-            {foundEvents.length > 0 && (
-              <div className="space-y-3">
-                <Label>Found Events</Label>
-                <div className="grid gap-2 max-h-60 overflow-y-auto">
-                  {foundEvents.map((event, index) => (
-                    <div
-                      key={index}
-                      className={`p-3 border rounded-lg cursor-pointer hover:bg-muted/50 ${
-                        selectedEvent === event ? 'border-primary bg-primary/5' : ''
-                      }`}
-                      onClick={() => loadEventData(event)}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-medium">{event.homeTeam} vs {event.awayTeam}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            {event.tournament} • {new Date(event.startTime).toLocaleDateString()}
-                          </p>
-                          <div className="flex gap-2 mt-1">
-                            {(event.markets || []).slice(0, 2).map((market: any, idx: number) => (
-                              <Badge key={idx} variant="secondary" className="text-xs">
-                                {market.name}
-                              </Badge>
-                            ))}
-                            {(event.markets || []).length === 0 && (
-                              <Badge variant="outline" className="text-xs">
-                                No markets
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                        <Badge variant={selectedEvent === event ? "default" : "outline"}>
-                          {selectedEvent === event ? 'Selected' : 'Select'}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
 
+        {/* Book Information */}
         <Card>
           <CardHeader>
             <CardTitle>Book Information</CardTitle>
@@ -638,6 +465,7 @@ export default function BookCreationForm() {
           </CardContent>
         </Card>
 
+        {/* Championship & Location */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -652,18 +480,13 @@ export default function BookCreationForm() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="championship">Championship / Tournament</Label>
-                <Select value={championship} onValueChange={setChampionship} disabled={isSubmitting}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select championship" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CHAMPIONSHIPS.map(champ => (
-                      <SelectItem key={champ} value={champ}>
-                        {champ}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  id="championship"
+                  value={championship}
+                  onChange={(e) => setChampionship(e.target.value)}
+                  placeholder="e.g., UEFA Europa League, IPL 2024"
+                  disabled={isSubmitting}
+                />
               </div>
 
               <div className="space-y-2">
@@ -673,28 +496,15 @@ export default function BookCreationForm() {
                     <SelectValue placeholder="Select country" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60">
-                    {COUNTRIES.map(country => (
-                      <SelectItem key={country} value={country}>
-                        {country}
+                    {COUNTRIES.map(c => (
+                      <SelectItem key={c} value={c}>
+                        {c}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
-
-            {championship === 'Other' && (
-              <div className="space-y-2">
-                <Label htmlFor="customChampionship">Custom Championship Name</Label>
-                <Input
-                  id="customChampionship"
-                  value={customChampionship}
-                  onChange={(e) => setCustomChampionship(e.target.value)}
-                  placeholder="Enter custom championship name"
-                  disabled={isSubmitting}
-                />
-              </div>
-            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center space-x-2">
@@ -731,7 +541,7 @@ export default function BookCreationForm() {
                   {championship && (
                     <Badge variant="secondary" className="flex items-center gap-1">
                       <Trophy className="h-3 w-3" />
-                      {championship === 'Other' ? customChampionship : championship}
+                      {championship}
                     </Badge>
                   )}
                   {country && (
@@ -758,6 +568,7 @@ export default function BookCreationForm() {
           </CardContent>
         </Card>
 
+        {/* Teams */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -767,12 +578,7 @@ export default function BookCreationForm() {
                   Teams
                 </CardTitle>
               </div>
-              <Button
-                type="button"
-                onClick={addTeam}
-                disabled={isSubmitting}
-                size="sm"
-              >
+              <Button type="button" onClick={addTeam} disabled={isSubmitting} size="sm">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Team
               </Button>
@@ -838,6 +644,7 @@ export default function BookCreationForm() {
           </CardContent>
         </Card>
 
+        {/* Betting Options */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -1047,7 +854,6 @@ export default function BookCreationForm() {
               setImage('')
               setDescription('')
               setChampionship('')
-              setCustomChampionship('')
               setCountry('')
               setIsHotEvent(false)
               setIsNationalSport(false)
@@ -1064,11 +870,7 @@ export default function BookCreationForm() {
           >
             Reset Form
           </Button>
-          <Button
-            type="submit"
-            disabled={isSubmitting}
-            className="min-w-32"
-          >
+          <Button type="submit" disabled={isSubmitting} className="min-w-32">
             {isSubmitting ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
