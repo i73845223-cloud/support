@@ -12,8 +12,8 @@ export const { auth: adminAuth, signIn, signOut, handlers } = NextAuth({
       }
 
       if (session.user) {
-        session.user.name = token.name;
-        session.user.email = token.email;
+        session.user.name = token.name ?? "";
+        session.user.email = token.email ?? "";
       }
 
       return session;
