@@ -136,7 +136,7 @@ export async function POST(req: Request) {
         teams: createdTeams,
         events: createdEvents
       }
-    })
+    },{ timeout: 30000 })
 
     return NextResponse.json(result.book)
   } catch (error: any) {
