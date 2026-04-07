@@ -63,9 +63,9 @@ async function getBookData(id: string) {
     const serializedBook: Book = {
       ...book,
       status: convertedStatus,
-      date: book.date.toISOString(),
-      createdAt: book.createdAt.toISOString(),
-      updatedAt: book.updatedAt.toISOString(),
+      date: new Date(book.date).toISOString(),
+      createdAt: new Date(book.createdAt).toISOString(),
+      updatedAt: new Date(book.updatedAt).toISOString(),
       isLive,
       isUpcoming,
       isAcceptingBets: now < bookDate,

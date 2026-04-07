@@ -223,7 +223,7 @@ model Book {
   title       String
   description String?
   status      BookStatus @default(ACTIVE)
-  date        String
+  date        DateTime
   category    String
   image       String?
   championship    String?
