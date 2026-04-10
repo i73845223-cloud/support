@@ -514,7 +514,7 @@ export default function AdminBookmakingDashboard() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Event</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-300">
-              Delete "{eventToDelete?.eventName}"? This cannot be undone.
+              Delete &quot;{eventToDelete?.eventName}&quot;? This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -529,7 +529,7 @@ export default function AdminBookmakingDashboard() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Book</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-300">
-              Delete "{bookToDelete?.title}" and all its events? This cannot be undone.
+              Delete &quot;{bookToDelete?.title}&quot; and all its events? This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
