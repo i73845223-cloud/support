@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Book } from '@/app/types/bookmaking'
+import { Book, Event } from '@/app/types/bookmaking'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -14,6 +14,7 @@ import {
 
 interface BookSettlementDialogProps {
   book: Book
+  event?: Event               // optional single event to settle
   isOpen: boolean
   onClose: () => void
   onSettlementComplete: () => void
@@ -21,11 +22,12 @@ interface BookSettlementDialogProps {
 
 export default function BookSettlementDialog({
   book,
+  event: singleEvent,
   isOpen,
   onClose,
   onSettlementComplete
 }: BookSettlementDialogProps) {
-  const [winningOutcomes, setWinningOutcomes] = useState<{[eventId: string]: string}>({})
+  const [winningOutcomes, setWinningOutcomes] = useState<{ [eventId: string]: string }>({})
   const [settling, setSettling] = useState(false)
   const [settledEvents, setSettledEvents] = useState<Set<string>>(new Set())
   const [refreshedBook, setRefreshedBook] = useState<Book | null>(null)
@@ -51,6 +53,13 @@ export default function BookSettlementDialog({
 
   const currentBook = refreshedBook || book
 
+  // Determine which events to settle
+  const eventsToSettle = singleEvent
+    ? [singleEvent]
+    : (currentBook.events || []).filter(event =>
+        event.outcomes?.some(o => o.result === 'PENDING')
+      )
+
   const getEventBetCount = (event: any): number => {
     return event.bets?.length || 0
   }
@@ -61,7 +70,7 @@ export default function BookSettlementDialog({
 
   const getEventStake = (event: any): number => {
     if (!event.outcomes) return 0
-    return event.outcomes.reduce((total: number, outcome: any) => 
+    return event.outcomes.reduce((total: number, outcome: any) =>
       total + getOutcomeStake(outcome), 0
     )
   }
@@ -74,10 +83,6 @@ export default function BookSettlementDialog({
     return outcome.result || null
   }
 
-  const pendingEvents = (currentBook.events || []).filter(event => 
-    event
-  )
-
   const handleOutcomeSelect = (eventId: string, outcomeId: string) => {
     setWinningOutcomes(prev => ({
       ...prev,
@@ -85,16 +90,16 @@ export default function BookSettlementDialog({
     }))
   }
 
-  const canSettleBook = () => {
-    return pendingEvents.every(event => winningOutcomes[event.id])
+  const canSettle = () => {
+    return eventsToSettle.every(event => winningOutcomes[event.id])
   }
 
   const getTotalPendingBets = () => {
-    return pendingEvents.reduce((total, event) => total + getEventBetCount(event), 0)
+    return eventsToSettle.reduce((total, event) => total + getEventBetCount(event), 0)
   }
 
   const getTotalPendingStake = () => {
-    return pendingEvents.reduce((total, event) => total + getEventStake(event), 0)
+    return eventsToSettle.reduce((total, event) => total + getEventStake(event), 0)
   }
 
   const settleEvent = async (eventId: string) => {
@@ -104,14 +109,10 @@ export default function BookSettlementDialog({
     try {
       const response = await fetch(`/api/admin/bookmaking/events/${eventId}/settle`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ winningOutcomeId }),
       })
-
       if (response.ok) {
-        const result = await response.json()
         setSettledEvents(prev => new Set(prev).add(eventId))
         return true
       } else {
@@ -124,46 +125,37 @@ export default function BookSettlementDialog({
     }
   }
 
-  const settleAllEvents = async () => {
-    if (!canSettleBook()) {
+  const handleSettle = async () => {
+    if (!canSettle()) {
       alert('Please select winning outcomes for all events before settling.')
       return
     }
 
-    if (!confirm(`Are you sure you want to settle all ${pendingEvents.length} events in this book? This will process ${getTotalPendingBets()} bets and cannot be undone.`)) {
-      return
-    }
+    const confirmMessage = singleEvent
+      ? `Settle event "${singleEvent.name}"?`
+      : `Settle all ${eventsToSettle.length} events? This will process ${getTotalPendingBets()} bets.`
+
+    if (!confirm(confirmMessage)) return
 
     setSettling(true)
-
     try {
-      for (const event of pendingEvents) {
+      for (const event of eventsToSettle) {
         if (!settledEvents.has(event.id)) {
           await settleEvent(event.id)
         }
       }
 
-      const updateResponse = await fetch(`/api/admin/bookmaking/books/${book.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: 'SETTLED' }),
-      })
-
-      if (updateResponse.ok) {
-        const updateResult = await updateResponse.json()
-      } else {
-        const error = await updateResponse.text()
-        console.error('Book update failed:', error)
-        throw new Error(`Failed to update book status: ${error}`)
+      // If settling the whole book, update its status
+      if (!singleEvent) {
+        await fetch(`/api/admin/bookmaking/books/${book.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'SETTLED' }),
+        })
       }
 
-      alert(`Book settled successfully! All ${pendingEvents.length} events have been processed.`)
       onSettlementComplete()
-      
     } catch (error: any) {
-      console.error('Settlement error:', error)
       alert(`Settlement failed: ${error.message || 'Unknown error'}`)
     } finally {
       setSettling(false)
@@ -182,9 +174,13 @@ export default function BookSettlementDialog({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-black">
         <DialogHeader>
-          <DialogTitle>Settle Book: {currentBook.title}</DialogTitle>
+          <DialogTitle>
+            {singleEvent ? `Settle Event: ${singleEvent.name}` : `Settle Book: ${currentBook.title}`}
+          </DialogTitle>
           <DialogDescription>
-            Select winning outcomes for each event and settle the entire book at once.
+            {singleEvent
+              ? 'Select the winning outcome for this event.'
+              : 'Select winning outcomes for each event and settle the entire book at once.'}
             <br />
             <span className="text-yellow-600 font-medium">
               Note: Cancelled bets will be automatically skipped during settlement.
@@ -192,28 +188,30 @@ export default function BookSettlementDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-blue-50 rounded-lg">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{pendingEvents.length}</div>
-            <div className="text-sm text-blue-600">Events to Settle</div>
+        {!singleEvent && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-blue-50 rounded-lg">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{eventsToSettle.length}</div>
+              <div className="text-sm text-blue-600">Events to Settle</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">{getTotalPendingBets()}</div>
+              <div className="text-sm text-blue-600">Pending Bets</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">₹{getTotalPendingStake().toFixed(2)}</div>
+              <div className="text-sm text-blue-600">Total Stake</div>
+            </div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{getTotalPendingBets()}</div>
-            <div className="text-sm text-blue-600">Pending Bets</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">₹{getTotalPendingStake().toFixed(2)}</div>
-            <div className="text-sm text-blue-600">Total Stake</div>
-          </div>
-        </div>
+        )}
 
         <div className="space-y-6">
-          {pendingEvents.length === 0 ? (
+          {eventsToSettle.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No events need settlement in this book.
+              No events need settlement.
             </div>
           ) : (
-            pendingEvents.map((event) => (
+            eventsToSettle.map((event) => (
               <div key={event.id} className="border rounded-lg p-4">
                 <div className="flex justify-between items-start mb-4">
                   <div>
@@ -264,7 +262,6 @@ export default function BookSettlementDialog({
                             </Badge>
                           )}
                         </div>
-                        
                         <div className="grid grid-cols-2 gap-2 text-sm">
                           <div>
                             <div className="text-muted-foreground">Odds</div>
@@ -279,11 +276,9 @@ export default function BookSettlementDialog({
                             </div>
                           </div>
                         </div>
-                        
                         <div className="mt-2 text-xs text-muted-foreground">
                           Probability: {(getOutcomeProbability(outcome) * 100).toFixed(1)}%
                         </div>
-
                         {winningOutcomes[event.id] === outcome.id && (
                           <div className="mt-2 text-xs font-medium text-blue-600">
                             ✓ Selected as winner
@@ -310,20 +305,15 @@ export default function BookSettlementDialog({
 
         <div className="flex justify-between items-center pt-4 border-t">
           <div className="text-sm text-muted-foreground">
-            {Object.keys(winningOutcomes).length} of {pendingEvents.length} events ready for settlement
+            {Object.keys(winningOutcomes).length} of {eventsToSettle.length} events ready
           </div>
-          
           <div className="flex gap-2">
-            <Button
-              onClick={onClose}
-              variant="outline"
-              disabled={settling}
-            >
+            <Button onClick={onClose} variant="outline" disabled={settling}>
               Cancel
             </Button>
             <Button
-              onClick={settleAllEvents}
-              disabled={!canSettleBook() || settling || pendingEvents.length === 0}
+              onClick={handleSettle}
+              disabled={!canSettle() || settling || eventsToSettle.length === 0}
               className="min-w-32"
             >
               {settling ? (
@@ -332,7 +322,7 @@ export default function BookSettlementDialog({
                   Settling...
                 </>
               ) : (
-                `Settle Book (${pendingEvents.length} events)`
+                singleEvent ? 'Settle Event' : `Settle Book (${eventsToSettle.length} events)`
               )}
             </Button>
           </div>

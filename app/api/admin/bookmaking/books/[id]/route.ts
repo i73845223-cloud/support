@@ -218,7 +218,7 @@ export async function PUT(
         teams: createdTeams,
         events: createdEvents,
       }
-    })
+    }, { timeout: 30000 })
 
     return NextResponse.json({
       success: true,

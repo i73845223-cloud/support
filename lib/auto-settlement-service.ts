@@ -7,9 +7,7 @@ class AutoSettlementService {
       const booksToCheck = await db.book.findMany({
         where: {
           status: 'ACTIVE',
-          date: {
-            lte: new Date()
-          }
+          date: { lte: new Date() }
         },
         include: {
           events: {
@@ -25,7 +23,6 @@ class AutoSettlementService {
       for (const book of booksToCheck) {
         await this.settleBookIfCompleted(book);
       }
-
     } catch (error) {
       console.error('Error in auto-settlement service:', error);
     }
@@ -36,9 +33,7 @@ class AutoSettlementService {
       const homeTeam = book.teams[0]?.name;
       const awayTeam = book.teams[1]?.name;
       
-      if (!homeTeam || !awayTeam) {
-        return;
-      }
+      if (!homeTeam || !awayTeam) return;
 
       const matchResult = await sportsDataService.getMatchResult(
         book.id,
@@ -47,34 +42,50 @@ class AutoSettlementService {
         book.category.toLowerCase()
       );
 
-      if (!matchResult) {
+      if (!matchResult || matchResult.status !== 'COMPLETED') return;
+
+      const eventsWithNoBets = book.events.filter((event: any) => {
+        const betCount = event.bets?.length || 0;
+        const totalStake = event.outcomes?.reduce(
+          (sum: number, o: any) => sum + (o.stake || 0),
+          0
+        ) || 0;
+        
+        return betCount === 0 && totalStake === 0;
+      });
+
+      console.log(`Book ${book.id}: ${eventsWithNoBets.length} of ${book.events.length} events have zero bets`);
+
+      if (eventsWithNoBets.length === 0) {
         return;
       }
 
-      if (matchResult.status === 'COMPLETED') {
-        await this.settleBookWithResults(book, matchResult);
-      }
+      await this.settleBookWithResults(book, matchResult, eventsWithNoBets);
 
     } catch (error) {
       console.error(`Error settling book ${book.id}:`, error);
     }
   }
 
-  private async settleBookWithResults(book: any, matchResult: any) {
+  private async settleBookWithResults(book: any, matchResult: any, eventsToSettle: any[]) {
     try {
-      for (const event of book.events) {
+      for (const event of eventsToSettle) {
         const winningOutcome = this.findWinningOutcome(event, matchResult);
-        
         if (winningOutcome) {
           await this.settleEvent(event.id, winningOutcome.id);
         }
       }
 
-      await db.book.update({
-        where: { id: book.id },
-        data: { status: 'SETTLED' }
+      const allEventsSettled = book.events.every((event: any) => {
+        return !event.outcomes.some((o: any) => o.result === 'PENDING');
       });
 
+      if (allEventsSettled) {
+        await db.book.update({
+          where: { id: book.id },
+          data: { status: 'SETTLED' }
+        });
+      }
     } catch (error) {
       console.error(`Error in settleBookWithResults for ${book.id}:`, error);
       throw error;
@@ -85,11 +96,7 @@ class AutoSettlementService {
     const marketResult = matchResult.outcomes.find((outcome: any) => 
       outcome.marketName === event.name
     );
-
-    if (!marketResult) {
-      return null;
-    }
-
+    if (!marketResult) return null;
     return event.outcomes.find((outcome: any) => 
       outcome.name === marketResult.winningOutcome
     );
@@ -97,18 +104,14 @@ class AutoSettlementService {
 
   private async settleEvent(eventId: string, winningOutcomeId: string) {
     try {
-      const response = await fetch(`https://support-green-six.vercel.app/api/admin/bookmaking/events/${eventId}/settle`, {
+      const response = await fetch(`https://support.altbet.casino/api/admin/bookmaking/events/${eventId}/settle`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ winningOutcomeId }),
       });
-
       if (!response.ok) {
         throw new Error(`Failed to settle event: ${response.statusText}`);
       }
-
       return await response.json();
     } catch (error) {
       console.error(`Error settling event ${eventId}:`, error);

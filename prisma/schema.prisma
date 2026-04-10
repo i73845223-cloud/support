@@ -11,6 +11,8 @@ generator client {
 enum UserRole {
   ADMIN
   USER
+  AFFILIATE
+  MEDIA
 }
 
 model User {
@@ -32,19 +34,18 @@ model User {
   isChatBlocked         Boolean                @default(false)
   twoFactorConfirmation TwoFactorConfirmation?
   transactions          Transaction[]
-
   conversations Conversation[]
   messages      Message[]
-
   books Book[]
   bets  Bet[]
-
   userPromoCodes UserPromoCode[]
   bonuses        Bonus[]
-
   assignedPromoCodes PromoCode[]         @relation("AssignedPromoCodes")
   influencerEarnings InfluencerEarning[] @relation("InfluencerEarnings")
   sourceEarnings     InfluencerEarning[] @relation("SourceUserEarnings")
+
+  cryptoPayments      CryptoPayment[]
+  withdrawalRequests  WithdrawalRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -140,13 +141,17 @@ model Transaction {
   bets        Bet[]
 
   bonus       Bonus?               @relation(fields: [bonusId], references: [id])
-  bonusId     String?              @unique
+  bonusId     String?              
 
   userId            String
   user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   InfluencerEarning InfluencerEarning[]
 
-  @@index([userId])
+  cryptoPayment     CryptoPayment?
+  withdrawalRequest WithdrawalRequest?
+
+  @@index([userId, status])
+  @@index([userId, type, status])
 }
 
 model TransactionHistory {
@@ -437,7 +442,7 @@ model Bonus {
   type                  PromoCodeType
   status                BonusStatus   @default(PENDING_ACTIVATION)
 
-  transaction           Transaction?
+  transaction           Transaction[]
   
   userId                String
   user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -482,4 +487,57 @@ model InfluencerEarning {
   @@index([sourceUserId])
   @@index([withdrawalId])
   @@index([promoCodeId])
+}
+
+enum CryptoPaymentStatus {
+  PENDING
+  CONFIRMING
+  CONFIRMED
+  FINISHED
+  FAILED
+  EXPIRED
+}
+
+model CryptoPayment {
+  id            String               @id @default(uuid())
+  userId        String
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paymentId     String               @unique
+  orderId       String
+  payAddress    String
+  payCurrency   String
+  payAmount     Decimal
+  priceAmount   Decimal              
+  priceCurrency String               
+  baseAmount    Decimal              
+  baseCurrency  String               @default("INR")
+  status        CryptoPaymentStatus  @default(PENDING)
+  expiresAt     DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  transactionId String?               @unique
+  transaction   Transaction?          @relation(fields: [transactionId], references: [id])
+
+  @@index([userId])
+  @@index([paymentId])
+  @@index([status])
+}
+
+model WithdrawalRequest {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount        Decimal  
+  currency      String   
+  address       String
+  baseAmount    Decimal  
+  baseCurrency  String   @default("INR")
+  status        String   
+  payoutId      String?
+  transactionId String?  @unique
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
 }
