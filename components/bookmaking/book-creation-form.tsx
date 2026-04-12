@@ -86,11 +86,9 @@ export default function BookCreationForm() {
   ])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // State for Parimatch URL import
   const [fetchUrl, setFetchUrl] = useState('')
   const [isFetching, setIsFetching] = useState(false)
 
-  // Fetch from Parimatch URL
   const fetchFromUrl = async () => {
     if (!fetchUrl.trim()) {
       toast.error('Please enter a Parimatch event URL')
@@ -108,7 +106,6 @@ export default function BookCreationForm() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Fetch failed')
 
-      // Populate form – startTime is already in local YYYY-MM-DDThh:mm format
       setTitle(data.title || '')
       setDate(data.startTime || '')
       setCategory(data.category || 'Cricket')
@@ -246,10 +243,10 @@ export default function BookCreationForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!session?.user?.id) {
-      toast.error("Please sign in to create a book")
-      return
-    }
+    // if (!session?.user?.id) {
+    //   toast.error("Please sign in to create a book")
+    //   return
+    // }
 
     const validTeams = getValidTeams()
     if (validTeams.length < 2) {
@@ -320,7 +317,6 @@ export default function BookCreationForm() {
       const data = await response.json()
 
       if (response.ok) {
-        // Reset form
         setTitle('')
         setDate('')
         setCategory('')
@@ -358,7 +354,6 @@ export default function BookCreationForm() {
   return (
     <div className="px-4 py-8">
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Import from Parimatch URL Card */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -385,7 +380,6 @@ export default function BookCreationForm() {
           </CardContent>
         </Card>
 
-        {/* Book Information */}
         <Card>
           <CardHeader>
             <CardTitle>Book Information</CardTitle>
@@ -465,7 +459,6 @@ export default function BookCreationForm() {
           </CardContent>
         </Card>
 
-        {/* Championship & Location */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -568,7 +561,6 @@ export default function BookCreationForm() {
           </CardContent>
         </Card>
 
-        {/* Teams */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -644,7 +636,6 @@ export default function BookCreationForm() {
           </CardContent>
         </Card>
 
-        {/* Betting Options */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">

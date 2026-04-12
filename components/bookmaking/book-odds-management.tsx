@@ -1,4 +1,3 @@
-// src/components/bookmaking/admin/BookOddsManagement.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -41,7 +40,6 @@ export default function BookOddsManagement() {
       })
 
       if (response.ok) {
-        // Update local state
         const updatedBooks = books.map(book => ({
           ...book,
           events: book.events.map(event => ({
@@ -78,7 +76,6 @@ export default function BookOddsManagement() {
       })
 
       if (response.ok) {
-        // Refresh books to get updated data
         fetchBooks()
         alert('Outcome result updated successfully!')
       } else {
@@ -103,8 +100,7 @@ export default function BookOddsManagement() {
 
       if (response.ok) {
         alert('Bets settled successfully!')
-        fetchBooks() // Refresh data
-        // Clear the winning outcome selection
+        fetchBooks()
         setWinningOutcomeMap(prev => ({ ...prev, [eventId]: '' }))
       } else {
         const errorData = await response.json()
@@ -124,7 +120,6 @@ export default function BookOddsManagement() {
     return <div className="text-center py-8">Loading books...</div>
   }
 
-  // Add these functions to your component
   const debugSettlement = async (eventId: string) => {
     try {
       const response = await fetch(`/api/admin/bookmaking/debug/settlement?eventId=${eventId}`)
@@ -167,7 +162,7 @@ export default function BookOddsManagement() {
       if (response.ok) {
         const result = await response.json()
         alert(`Force settlement completed! ${result.data.updatedBets} bets updated.`)
-        fetchBooks() // Refresh data
+        fetchBooks()
       } else {
         const error = await response.json()
         alert(`Force settlement failed: ${error.message || 'Unknown error'}`)
@@ -180,7 +175,6 @@ export default function BookOddsManagement() {
 
   return (
     <div className="space-y-6">
-      {/* Book Selection */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -224,7 +218,6 @@ export default function BookOddsManagement() {
         )}
       </div>
 
-      {/* Odds Management */}
       {selectedBook && (
         <div className="space-y-6">
           <div className="bg-white rounded-lg border p-6">
@@ -290,7 +283,6 @@ export default function BookOddsManagement() {
             </div>
           </div>
 
-          {/* Book Statistics */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white p-4 rounded-lg border text-center">
               <div className="text-2xl font-bold text-gray-900">
