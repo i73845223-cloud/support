@@ -83,32 +83,32 @@ export const {
 
       return session;
     },
-
     async jwt({ token }) {
-      if (!token.sub) return token
+      if (!token.sub) return token;
 
-      const existingUser = await getUserById(token.sub)
+      try {
+        const existingUser = await getUserById(token.sub);
+        if (!existingUser) return token;
 
-      if (!existingUser) return token
+        const existingAccount = await getAccountByUserId(existingUser.id);
 
-      const existingAccount = await getAccountByUserId(
-        existingUser.id
-      )
+        token.isOAuth = !!existingAccount;
+        token.name = existingUser.name;
+        token.surname = existingUser.surname;
+        token.birth = existingUser.birth;
+        token.country = existingUser.country;
+        token.city = existingUser.city;
+        token.email = existingUser.email;
+        token.role = existingUser.role;
+        token.isTwoFactorEnabled = existingUser.isTwoFactorEnabled;
+        token.isBlocked = existingUser.isBlocked;
+        token.isChatBlocked = existingUser.isChatBlocked;
+        token.isImageApproved = existingUser.isImageApproved;
+      } catch (error) {
+        console.error('JWT callback DB error (non-fatal):', error);
+      }
 
-      token.isOAuth = !!existingAccount
-      token.name = existingUser.name
-      token.surname = existingUser.surname
-      token.birth = existingUser.birth
-      token.country = existingUser.country
-      token.city = existingUser.city
-      token.email = existingUser.email
-      token.role = existingUser.role
-      token.isTwoFactorEnabled = existingUser.isTwoFactorEnabled
-      token.isBlocked = existingUser.isBlocked
-      token.isChatBlocked = existingUser.isChatBlocked
-      token.isImageApproved = existingUser.isImageApproved
-
-      return token
+      return token;
     },
   },
   adapter: PrismaAdapter(db),
