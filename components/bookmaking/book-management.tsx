@@ -276,11 +276,6 @@ export default function BookManagement({ book }: BookManagementProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!session?.user?.id) {
-      toast.error("Please sign in to update the book")
-      return
-    }
-
     const validTeams = getValidTeams()
     if (validTeams.length < 2) {
       toast.error("Please add at least 2 teams to create events")
@@ -367,11 +362,6 @@ export default function BookManagement({ book }: BookManagementProps) {
 
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this book? This action cannot be undone.')) {
-      return
-    }
-
-    if (!session?.user?.id) {
-      toast.error("Please sign in to delete the book")
       return
     }
 
