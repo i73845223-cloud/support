@@ -4,14 +4,19 @@ import { DEFAULT_LOGIN_REDIRECT, apiAuthPrefix, authRoutes } from "./routes"
 
 const { auth } = NextAuth(authConfig)
 
+const publicApiRoutes = [
+  '/api/cron/cleanup-books',
+]
+
 export default auth((req) => {
   const { nextUrl } = req
   const isLoggedIn = !!req.auth
 
   const isApiAuthRoute = nextUrl.pathname.startsWith(apiAuthPrefix)
   const isAuthRoute = authRoutes.includes(nextUrl.pathname)
+  const isPublicApiRoute = publicApiRoutes.includes(nextUrl.pathname)
 
-  if (isApiAuthRoute) {
+  if (isApiAuthRoute || isPublicApiRoute) {
     return null
   }
 
