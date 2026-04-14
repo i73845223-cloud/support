@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// ⚠️ SET THIS TO TRUE ONLY AFTER YOU'VE VERIFIED THE LIST
+// ⚠️ SET TO TRUE ONLY AFTER DRY RUN VERIFICATION
 const ACTUALLY_DELETE = false
 
 export async function GET(request: Request) {
@@ -11,24 +11,20 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 1. Get all live books (adjust date condition if you have a status field)
-    const liveBooks = await db.book.findMany({
+    const now = new Date()
+
+    // Fetch all books that could be live (not SETTLED/CANCELLED)
+    const candidateBooks = await db.book.findMany({
       where: {
-        date: { gte: new Date() }
+        status: { notIn: ['SETTLED', 'CANCELLED'] }
       },
       include: {
-        // Direct bets on the book
-        bets: {
-          select: { id: true }
-        },
-        // Events and their outcome bets
+        bets: { select: { id: true } },
         events: {
           include: {
             outcomes: {
               include: {
-                bets: {
-                  select: { id: true }
-                }
+                bets: { select: { id: true } }
               }
             }
           }
@@ -36,14 +32,24 @@ export async function GET(request: Request) {
       }
     })
 
-    // 2. Separate books with stakes vs. no stakes
+    // Apply the same "live" logic as the dashboard
+    const liveBooks = candidateBooks.filter(book => {
+      const bookDate = new Date(book.date)
+      const hasPending = book.events.some(ev =>
+        ev.outcomes.some(o => o.result === 'PENDING')
+      )
+      // LIVE = date <= now AND has pending outcomes
+      return bookDate <= now && hasPending
+    })
+
+    // Separate books with stakes vs no stakes
     const booksWithStakes: any[] = []
     const booksWithNoStakes: any[] = []
 
     liveBooks.forEach(book => {
       const hasBookBets = book.bets.length > 0
-      const hasOutcomeBets = book.events.some(event =>
-        event.outcomes.some(outcome => outcome.bets.length > 0)
+      const hasOutcomeBets = book.events.some(ev =>
+        ev.outcomes.some(o => o.bets.length > 0)
       )
 
       if (hasBookBets || hasOutcomeBets) {
@@ -53,12 +59,20 @@ export async function GET(request: Request) {
       }
     })
 
-    // 3. Log the results
-    console.log(`📊 LIVE BOOKS: ${liveBooks.length}`)
-    console.log(`✅ Books WITH stakes: ${booksWithStakes.length}`)
-    console.log(`🗑️ Books with NO stakes (to be deleted): ${booksWithNoStakes.length}`)
+    console.log(`📊 Total candidate books (not settled/cancelled): ${candidateBooks.length}`)
+    console.log(`🎯 LIVE books (date <= now + pending outcomes): ${liveBooks.length}`)
+    console.log(`✅ Live books WITH stakes: ${booksWithStakes.length}`)
+    console.log(`🗑️ Live books with NO stakes (to delete): ${booksWithNoStakes.length}`)
 
-    // 4. If we're not actually deleting, return a detailed report
+    // Log details for verification
+    if (liveBooks.length > 0) {
+      console.log('\n📋 LIVE BOOKS DETAILS:')
+      liveBooks.forEach(b => {
+        const stake = b.bets.length + b.events.reduce((s, e) => s + e.outcomes.reduce((oSum, o) => oSum + o.bets.length, 0), 0)
+        console.log(`  - ${b.title} | Date: ${b.date} | Stakes: ${stake}`)
+      })
+    }
+
     if (!ACTUALLY_DELETE) {
       const preview = booksWithNoStakes.slice(0, 5).map(b => ({
         id: b.id,
@@ -68,30 +82,26 @@ export async function GET(request: Request) {
 
       return NextResponse.json({
         dryRun: true,
-        totalLiveBooks: liveBooks.length,
+        totalCandidateBooks: candidateBooks.length,
+        liveBooksCount: liveBooks.length,
         booksWithStakes: booksWithStakes.length,
         booksWithNoStakes: booksWithNoStakes.length,
         previewOfBooksToDelete: preview,
-        message: 'Dry run completed. No books were deleted. Set ACTUALLY_DELETE=true to perform deletion.'
+        message: 'Dry run completed. Set ACTUALLY_DELETE=true to perform deletion.'
       })
     }
 
-    // 5. Perform actual deletion (only if ACTUALLY_DELETE = true)
+    // Actual deletion
     if (booksWithNoStakes.length === 0) {
       return NextResponse.json({ deleted: 0 })
     }
 
     const deleted = await db.book.deleteMany({
-      where: {
-        id: { in: booksWithNoStakes.map(b => b.id) }
-      }
+      where: { id: { in: booksWithNoStakes.map(b => b.id) } }
     })
 
     console.log(`✅ Deleted ${deleted.count} empty live books`)
-    return NextResponse.json({
-      dryRun: false,
-      deleted: deleted.count
-    })
+    return NextResponse.json({ deleted: deleted.count })
 
   } catch (error) {
     console.error('❌ Cleanup error:', error)
