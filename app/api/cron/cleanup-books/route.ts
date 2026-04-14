@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// ⚠️ SET TO TRUE ONLY AFTER DRY RUN VERIFICATION
-const ACTUALLY_DELETE = false
+const ACTUALLY_DELETE = true
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization')
@@ -13,7 +12,6 @@ export async function GET(request: Request) {
   try {
     const now = new Date()
 
-    // Fetch all books that could be live (not SETTLED/CANCELLED)
     const candidateBooks = await db.book.findMany({
       where: {
         status: { notIn: ['SETTLED', 'CANCELLED'] }
@@ -32,17 +30,14 @@ export async function GET(request: Request) {
       }
     })
 
-    // Apply the same "live" logic as the dashboard
     const liveBooks = candidateBooks.filter(book => {
       const bookDate = new Date(book.date)
       const hasPending = book.events.some(ev =>
         ev.outcomes.some(o => o.result === 'PENDING')
       )
-      // LIVE = date <= now AND has pending outcomes
       return bookDate <= now && hasPending
     })
 
-    // Separate books with stakes vs no stakes
     const booksWithStakes: any[] = []
     const booksWithNoStakes: any[] = []
 
@@ -64,7 +59,6 @@ export async function GET(request: Request) {
     console.log(`✅ Live books WITH stakes: ${booksWithStakes.length}`)
     console.log(`🗑️ Live books with NO stakes (to delete): ${booksWithNoStakes.length}`)
 
-    // Log details for verification
     if (liveBooks.length > 0) {
       console.log('\n📋 LIVE BOOKS DETAILS:')
       liveBooks.forEach(b => {
@@ -91,7 +85,6 @@ export async function GET(request: Request) {
       })
     }
 
-    // Actual deletion
     if (booksWithNoStakes.length === 0) {
       return NextResponse.json({ deleted: 0 })
     }

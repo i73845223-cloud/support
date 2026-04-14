@@ -183,12 +183,12 @@ export default function AdminBookmakingDashboard() {
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'ACTIVE': return 'default'
+      // case 'ACTIVE': return 'default'
       case 'LIVE': return 'default'
       case 'UPCOMING': return 'secondary'
-      case 'INACTIVE': return 'secondary'
+      // case 'INACTIVE': return 'secondary'
       case 'SETTLED': return 'outline'
-      case 'CANCELLED': return 'destructive'
+      // case 'CANCELLED': return 'destructive'
       default: return 'secondary'
     }
   }
