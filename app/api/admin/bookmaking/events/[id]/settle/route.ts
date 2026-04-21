@@ -11,13 +11,21 @@ interface RouteParams {
 export async function POST(req: Request, { params }: RouteParams) {
   try {
     const user = await currentUser()
-    if (!user?.id) return new NextResponse("Unauthorized", { status: 401 })
+    if (!user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
 
     const { id: eventId } = params
     const { winningOutcomeId } = await req.json()
 
     if (!winningOutcomeId) {
-      return new NextResponse("Winning outcome ID is required", { status: 400 })
+      return NextResponse.json(
+        { error: 'Winning outcome ID is required' },
+        { status: 400 }
+      )
     }
 
     const result = await db.$transaction(async (tx) => {
@@ -170,15 +178,13 @@ export async function POST(req: Request, { params }: RouteParams) {
     })
 
   } catch (error: any) {
-    if (error.message === 'Event not found') {
-      return new NextResponse("Event not found", { status: 404 })
-    }
-    if (error.message === 'Winning outcome not found in this event') {
-      return new NextResponse("Winning outcome not found in this event", { status: 400 })
-    }
+    console.error('❌ [SETTLE_EVENT] Error:', error)
 
-    return new NextResponse(
-      `Settlement failed: ${error.message || 'Unknown error'}`,
+    return NextResponse.json(
+      {
+        error: error.message || 'Settlement failed due to an internal error',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     )
   }
