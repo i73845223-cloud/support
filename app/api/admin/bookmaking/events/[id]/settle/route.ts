@@ -90,7 +90,11 @@ export async function POST(req: Request, { params }: RouteParams) {
             where: { userId: bet.userId },
             include: {
               promoCode: {
-                include: { assignedUser: true }
+                include: { 
+                  assignedUser: {
+                    select: { id: true } 
+                  }
+                }
               }
             },
             orderBy: { createdAt: 'desc' }
