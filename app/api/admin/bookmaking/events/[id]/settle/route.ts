@@ -52,9 +52,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         }
       })
 
-
       for (const bet of pendingBets) {
-
         const isWinner = bet.outcomeId === winningOutcomeId
         const newStatus = isWinner ? 'WON' : 'LOST'
 
@@ -63,11 +61,7 @@ export async function POST(req: Request, { params }: RouteParams) {
           select: { status: true }
         })
 
-        if (!currentBet) {
-          continue
-        }
-
-        if (currentBet.status !== 'PENDING') {
+        if (!currentBet || currentBet.status !== 'PENDING') {
           continue
         }
 
@@ -79,19 +73,71 @@ export async function POST(req: Request, { params }: RouteParams) {
           }
         })
 
-        if (isWinner) {
-          if (bet.transaction) {
-            if (bet.transaction.status === 'pending') {
-              await tx.transaction.update({
-                where: { id: bet.transaction.id },
-                data: {
-                  status: 'success',
-                  description: `WON: ${event.name} - ${bet.outcome.name}`
-                }
-              })
+        if (isWinner && bet.transaction) {
+          if (bet.transaction.status === 'pending') {
+            await tx.transaction.update({
+              where: { id: bet.transaction.id },
+              data: {
+                status: 'success',
+                description: `WON: ${event.name} - ${bet.outcome.name}`
+              }
+            })
           }
         }
-      }}
+
+        const userPromo = await tx.userPromoCode.findFirst({
+          where: { userId: bet.userId },
+          include: {
+            promoCode: {
+              include: { assignedUser: true }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+
+        const promoCode = userPromo?.promoCode
+
+        if (
+          promoCode?.assignedUserId &&
+          promoCode.assignedUser &&
+          promoCode.commissionPercentage &&
+          promoCode.commissionPercentage > 0
+        ) {
+          const commissionAmount = bet.amount * (promoCode.commissionPercentage / 100)
+
+          const stakeTransaction = await tx.transaction.findFirst({
+            where: {
+              userId: bet.userId,
+              category: 'betting-stake',
+              description: { contains: event.name }
+            },
+            orderBy: { createdAt: 'desc' }
+          })
+
+          await tx.influencerEarning.create({
+            data: {
+              amount: commissionAmount,
+              description: `${promoCode.commissionPercentage}% commission from bet stake via ${promoCode.code}`,
+              type: 'BET_COMMISSION',
+              influencerId: promoCode.assignedUserId,
+              sourceUserId: bet.userId,
+              withdrawalId: stakeTransaction?.id,
+              promoCodeId: promoCode.id
+            }
+          })
+
+          await tx.transaction.create({
+            data: {
+              userId: promoCode.assignedUserId,
+              amount: commissionAmount,
+              type: 'deposit',
+              status: 'success',
+              description: `Commission from bet stake via ${promoCode.code}`,
+              category: 'commission'
+            }
+          })
+        }
+      }
 
       await tx.event.update({
         where: { id: eventId },
@@ -104,7 +150,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       })
 
       await tx.outcome.updateMany({
-        where: { 
+        where: {
           eventId: eventId,
           id: { not: winningOutcomeId }
         },
@@ -124,7 +170,6 @@ export async function POST(req: Request, { params }: RouteParams) {
     })
 
   } catch (error: any) {
-    
     if (error.message === 'Event not found') {
       return new NextResponse("Event not found", { status: 404 })
     }
