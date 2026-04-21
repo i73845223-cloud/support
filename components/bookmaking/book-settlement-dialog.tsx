@@ -112,12 +112,14 @@ export default function BookSettlementDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ winningOutcomeId }),
       })
+
+      const data = await response.json()
+
       if (response.ok) {
         setSettledEvents(prev => new Set(prev).add(eventId))
         return true
       } else {
-        const error = await response.json()
-        throw new Error(error.message || 'Failed to settle event')
+        throw new Error(data.error || 'Failed to settle event')
       }
     } catch (error) {
       console.error(`Error settling event ${eventId}:`, error)
