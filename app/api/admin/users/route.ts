@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth();
 
-    console.log('Session in admin users API:', session); // Debug log
+    console.log('Session in admin users API:', session);
 
     if (!session?.user) {
       return NextResponse.json(
@@ -15,7 +15,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check if user has admin role - adjust this based on your role field
     if (session.user.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Forbidden - Admin access required' },
@@ -30,7 +29,7 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     const whereClause: any = {
-      role: 'USER'
+      role: 'MEDIA'
     };
 
     if (search) {
@@ -53,7 +52,7 @@ export async function GET(request: NextRequest) {
           isChatBlocked: true,
           isImageApproved: true,
           createdAt: true,
-          image: true, // Include the entire image relation
+          image: true,
         },
         orderBy: {
           createdAt: 'desc',
@@ -88,7 +87,7 @@ export async function GET(request: NextRequest) {
       id: u.id, 
       hasImage: !!u.image,
       isImageApproved: u.isImageApproved 
-    }))); // Debug log
+    })));
 
     return NextResponse.json({
       users: validUsers,

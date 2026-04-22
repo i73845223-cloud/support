@@ -81,7 +81,6 @@ export default async function AdminPromoCodesPage() {
         </Card>
       </div>
 
-      {/* Promo Codes List */}
       <Card>
         <CardHeader>
           <CardTitle>All Promo Codes</CardTitle>
