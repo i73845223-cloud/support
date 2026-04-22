@@ -75,26 +75,27 @@ export function PromoCodeCreator() {
   const fetchUsers = async (search = '') => {
     try {
       setIsSearching(true);
-      const url = search ? `/api/admin/users?search=${encodeURIComponent(search)}&limit=100` : '/api/admin/users?limit=100';
+      const url = search
+        ? `/api/admin/influencers?search=${encodeURIComponent(search)}&limit=100`
+        : '/api/admin/influencers?limit=100';
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         setUsers(data.users || []);
         setFilteredUsers(data.users || []);
       } else {
-        console.error('Failed to fetch users:', response.status);
+        console.error('Failed to fetch influencers:', response.status);
         setUsers([]);
         setFilteredUsers([]);
       }
     } catch (error) {
-      console.error('Failed to fetch users:', error);
+      console.error('Failed to fetch influencers:', error);
       setUsers([]);
       setFilteredUsers([]);
     } finally {
       setIsSearching(false);
     }
   };
-
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     if (query.trim()) {

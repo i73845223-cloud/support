@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     const whereClause: any = {
-      role: 'MEDIA'
+      role: 'USER'
     };
 
     if (search) {
