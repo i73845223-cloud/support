@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: NextRequest) {
   try {
     const { url } = await req.json()
-    if (!url || !url.includes('pm-betting.com/en/event')) {
+    if (!url || !url.includes('pari-betting.com/en/event')) {
       return NextResponse.json({ error: 'Invalid Parimatch event URL' }, { status: 400 })
     }
 
@@ -25,7 +25,6 @@ export async function POST(req: NextRequest) {
       await page.setViewport({ width: 1280, height: 800 })
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 })
       
-      // Wait for odds-related text (works for football, cricket, basketball)
       await page.waitForFunction(() => {
         const text = document.body.innerText
         return text.includes('Full-time result') ||
@@ -35,7 +34,6 @@ export async function POST(req: NextRequest) {
                text.includes('3-way betting')
       }, { timeout: 30000 })
 
-      // Extract teams using stable data-id attribute
       const teams = await page.evaluate(() => {
         let home = '', away = ''
         const teamContainers = Array.from(document.querySelectorAll('[data-id^="competitor-"]'))
@@ -47,7 +45,6 @@ export async function POST(req: NextRequest) {
           home = homeNameEl ? homeNameEl.textContent?.trim() || '' : ''
           away = awayNameEl ? awayNameEl.textContent?.trim() || '' : ''
         }
-        // Fallback: use h1
         if (!home || !away) {
           const h1 = document.querySelector('h1')?.textContent?.trim() || ''
           const parts = h1.split(' - ')
@@ -74,7 +71,6 @@ export async function POST(req: NextRequest) {
         return { homeTeam: home, awayTeam: away, homeImg, awayImg }
       })
 
-      // Extract sport and championship from breadcrumb/navigation bar
       const sportData = await page.evaluate(() => {
         let sport = 'Football'
         let championship = ''
@@ -110,7 +106,6 @@ export async function POST(req: NextRequest) {
         return { sport, championship }
       })
 
-      // Extract match time
       const timeData = await page.evaluate(() => {
         const dateSpan = document.querySelector('[data-testid="prematch-start-date"]')
         const timeSpan = document.querySelector('[data-testid="prematch-start-time"]')
@@ -132,19 +127,15 @@ export async function POST(req: NextRequest) {
         return startTime
       })
 
-      // Extract odds using text parser (works for all sports)
       const text = await page.evaluate(() => document.body.innerText)
       const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
 
       const marketKeywords = [
-        // Football
         'Full-time result', 'Double chance', 'Both teams to score', 'Correct score',
         'Total', 'Winner', 'Handicap', 'Match winner', 'Result and total',
         'Exact number', 'To qualify', 'Penalty', 'Goal line', 'Corners',
-        // Cricket
         'Toss winner', 'Toss and match winner', 'First boundary', 'Ball 1 of match',
         'total runs', 'Innings', 'to score a goal',
-        // Basketball
         'To win including overtime', '3-way betting', 'Total', 'Handicap',
         'Cleveland Cavaliers total', 'Atlanta Hawks total', 'Total. Even/Odd',
         'Moneyline', 'Point spread', 'Total points', 'Quarter winner', 'Half winner'
@@ -176,7 +167,6 @@ export async function POST(req: NextRequest) {
 
       if (outcomesRaw.length === 0) throw new Error('No odds found')
 
-      // Group by market
       const marketsMap = new Map<string, { name: string; odds: number; order: number }[]>()
       outcomesRaw.forEach(item => {
         if (!marketsMap.has(item.market)) marketsMap.set(item.market, [])
@@ -185,12 +175,10 @@ export async function POST(req: NextRequest) {
       })
       const markets = Array.from(marketsMap.entries()).map(([name, outcomes]) => ({ name, outcomes }))
 
-      // Build result
-      const baseUrl = 'https://pm-betting.com'
+      const baseUrl = 'https://pari-betting.com'
       const homeImgFull = teams.homeImg ? (teams.homeImg.startsWith('http') ? teams.homeImg : baseUrl + teams.homeImg) : ''
       const awayImgFull = teams.awayImg ? (teams.awayImg.startsWith('http') ? teams.awayImg : baseUrl + teams.awayImg) : ''
 
-      // Take first 5 markets (you can adjust)
       const events = markets.slice(0, 5).map((market, idx) => ({
         name: market.name,
         isFirstFastOption: idx === 0,

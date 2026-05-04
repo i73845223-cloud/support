@@ -47,6 +47,9 @@ model User {
   cryptoPayments      CryptoPayment[]
   withdrawalRequests  WithdrawalRequest[]
 
+  commissionPercent Float?
+  createdPromoCodes  PromoCode[]  @relation("PromoCodeCreatedBy")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -401,6 +404,9 @@ model PromoCode {
   userPromoCodes     UserPromoCode[]
   bonuses            Bonus[]
   influencerEarnings InfluencerEarning[]
+
+  createdByUserId   String?
+  createdBy         User?    @relation("PromoCodeCreatedBy", fields: [createdByUserId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
