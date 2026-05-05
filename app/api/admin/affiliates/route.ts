@@ -37,7 +37,6 @@ export async function GET(request: NextRequest) {
     db.user.findMany({
       where: whereClause,
       include: {
-        // We need to compute statistics later manually
       },
       orderBy: { createdAt: "desc" },
       skip,
@@ -46,33 +45,24 @@ export async function GET(request: NextRequest) {
     db.user.count({ where: whereClause }),
   ]);
 
-  // Enrich each affiliate with:
-  // - totalMediaBuyers (count of MEDIA users they created)
-  // - totalReferrals (sum of referrals of all their media buyers)
-  // - totalNgr (net flow from all their media buyers' referred users)
-  // - totalBalance (commission – own withdrawals)
   const enrichedAffiliates = await Promise.all(
     users.map(async (affiliate) => {
-      // Media buyers count
       const mediaBuyerCount = await db.user.count({
         where: { createdByUserId: affiliate.id, role: "MEDIA" },
       });
 
-      // Get all media buyer IDs created by this affiliate
       const mediaBuyers = await db.user.findMany({
         where: { createdByUserId: affiliate.id, role: "MEDIA" },
         select: { id: true },
       });
       const mediaBuyerIds = mediaBuyers.map(mb => mb.id);
 
-      // Total referrals = total userPromoCodes for all these media buyers
       const totalReferrals = await db.userPromoCode.count({
         where: {
           promoCode: { assignedUserId: { in: mediaBuyerIds } },
         },
       });
 
-      // Total NGR from all referred users of these media buyers
       let totalNgr = new Prisma.Decimal(0);
       if (mediaBuyerIds.length > 0) {
         const refUsers = await db.userPromoCode.findMany({
@@ -109,7 +99,6 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Affiliate's own withdrawals
       const ownWithdrawalsAgg = await db.transaction.aggregate({
         where: { userId: affiliate.id, type: "withdrawal", status: "success" },
         _sum: { amount: true },
@@ -129,8 +118,6 @@ export async function GET(request: NextRequest) {
     })
   );
 
-  // Global totals for summary cards (optional)
-  // totalDeposits for affiliates? We'll skip the global deposit card and just show total affiliates, total media buyers, etc.
 
   return NextResponse.json({
     users: enrichedAffiliates,
@@ -174,6 +161,7 @@ export async function POST(request: NextRequest) {
       password: hashedPassword,
       role: "AFFILIATE",
       commissionPercent: commissionPercent ? parseFloat(commissionPercent) : null,
+      emailVerified: new Date(),
     },
   });
 
