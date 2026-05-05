@@ -50,6 +50,10 @@ model User {
   commissionPercent Float?
   createdPromoCodes  PromoCode[]  @relation("PromoCodeCreatedBy")
 
+  createdByUserId   String?
+  createdBy         User?    @relation("UserCreatedBy", fields: [createdByUserId], references: [id])
+  createdUsers      User[]   @relation("UserCreatedBy")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
