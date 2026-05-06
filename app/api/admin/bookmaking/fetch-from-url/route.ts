@@ -141,16 +141,29 @@ export async function POST(req: NextRequest) {
         'Moneyline', 'Point spread', 'Total points', 'Quarter winner', 'Half winner'
       ]
 
+      const ignoredMarkets = new Set([
+        'All', 'Main', 'Match', 'Sessions', 'Overs', 'Players',
+        'Special offers', 'Parlays', 'Bet Builder'
+      ])
+
       const outcomesRaw: { market: string; name: string; odds: number }[] = []
       let currentMarket = 'General'
+
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i]
+
+        if (ignoredMarkets.has(line) || line.toLowerCase().includes('bet builder')) {
+          continue
+        }
+
         const isMarket = marketKeywords.some(kw => line.toLowerCase().includes(kw.toLowerCase())) ||
                          (line.length > 5 && line.match(/[A-Za-z]/) && !line.match(/^\d+(\.\d+)?$/))
+
         if (isMarket) {
           currentMarket = line
           continue
         }
+
         if (line.match(/^\d+(\.\d+)?$/)) {
           const odds = parseFloat(line)
           if (odds > 0 && odds < 100) {
