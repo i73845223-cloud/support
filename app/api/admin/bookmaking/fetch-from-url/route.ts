@@ -34,8 +34,9 @@ export async function POST(req: NextRequest) {
                text.includes('3-way betting')
       }, { timeout: 30000 })
 
+      // ----- Teams and images (stable) -----
       const teams = await page.evaluate(() => {
-        let home = '', away = ''
+        let home = '', away = '', homeImg = '', awayImg = ''
         const teamContainers = Array.from(document.querySelectorAll('[data-id^="competitor-"]'))
         if (teamContainers.length >= 2) {
           const homeContainer = teamContainers[0]
@@ -44,7 +45,12 @@ export async function POST(req: NextRequest) {
           const awayNameEl = awayContainer.querySelector('.EC_HN a, .EC_Ft')
           home = homeNameEl ? homeNameEl.textContent?.trim() || '' : ''
           away = awayNameEl ? awayNameEl.textContent?.trim() || '' : ''
+          const homeImgEl = homeContainer.querySelector('img')
+          const awayImgEl = awayContainer.querySelector('img')
+          homeImg = homeImgEl?.getAttribute('src') || ''
+          awayImg = awayImgEl?.getAttribute('src') || ''
         }
+        // Fallback to h1 if needed
         if (!home || !away) {
           const h1 = document.querySelector('h1')?.textContent?.trim() || ''
           const parts = h1.split(' - ')
@@ -62,18 +68,25 @@ export async function POST(req: NextRequest) {
         }
         if (!home) home = 'Home Team'
         if (!away) away = 'Away Team'
-        const imgs = Array.from(document.querySelectorAll('img')).filter(img => img.src.includes('competitors'))
-        let homeImg = '', awayImg = ''
-        if (imgs.length >= 2) {
-          homeImg = imgs[0].src
-          awayImg = imgs[1].src
-        }
         return { homeTeam: home, awayTeam: away, homeImg, awayImg }
       })
 
+      // ----- Sport and championship (from breadcrumb / navigation bar) -----
       const sportData = await page.evaluate(() => {
         let sport = 'Football'
         let championship = ''
+        // Check event-view-header attribute
+        const header = document.querySelector('[data-onboarding^="event-view-header-"]')
+        if (header) {
+          const headerAttr = header.getAttribute('data-onboarding') || ''
+          if (headerAttr.includes('cricket')) sport = 'Cricket'
+          else if (headerAttr.includes('football')) sport = 'Football'
+          else if (headerAttr.includes('tennis')) sport = 'Tennis'
+          else if (headerAttr.includes('kabaddi')) sport = 'Kabaddi'
+          else if (headerAttr.includes('basketball')) sport = 'Basketball'
+          else if (headerAttr.includes('eSport')) sport = 'Esports'
+        }
+        // Also check breadcrumb
         const breadcrumbLinks = Array.from(document.querySelectorAll('.seo-kit_styles_items-1V-RbrKxNFUhL2OA a'))
         for (const link of breadcrumbLinks) {
           const text = link.textContent?.toLowerCase() || ''
@@ -82,15 +95,9 @@ export async function POST(req: NextRequest) {
           if (text.includes('tennis')) { sport = 'Tennis'; break }
           if (text.includes('kabaddi')) { sport = 'Kabaddi'; break }
           if (text.includes('basketball')) { sport = 'Basketball'; break }
+          if (text.includes('e-sports') || text.includes('e-sport')) { sport = 'Esports'; break }
         }
-        if (sport === 'Football') {
-          const navDesc = document.querySelector('.modulor_navigation-bar__description__1_102_0')?.textContent?.toLowerCase() || ''
-          if (navDesc.includes('cricket')) sport = 'Cricket'
-          else if (navDesc.includes('football')) sport = 'Football'
-          else if (navDesc.includes('tennis')) sport = 'Tennis'
-          else if (navDesc.includes('kabaddi')) sport = 'Kabaddi'
-          else if (navDesc.includes('basketball')) sport = 'Basketball'
-        }
+        // Championship from breadcrumb
         const breadcrumbItems = Array.from(document.querySelectorAll('.seo-kit_styles_items-1V-RbrKxNFUhL2OA li'))
         for (let i = breadcrumbItems.length - 2; i >= 0; i--) {
           const text = breadcrumbItems[i]?.textContent?.trim()
@@ -106,6 +113,7 @@ export async function POST(req: NextRequest) {
         return { sport, championship }
       })
 
+      // ----- Match time -----
       const timeData = await page.evaluate(() => {
         const dateSpan = document.querySelector('[data-testid="prematch-start-date"]')
         const timeSpan = document.querySelector('[data-testid="prematch-start-time"]')
@@ -127,71 +135,109 @@ export async function POST(req: NextRequest) {
         return startTime
       })
 
-      const text = await page.evaluate(() => document.body.innerText)
-      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+      // ----- Odds extraction using data-anchor -----
+      const oddsData = await page.evaluate(() => {
+        const outcomes: { market: string; name: string; odds: number }[] = []
+        const buttons = document.querySelectorAll('[data-anchor]')
+        buttons.forEach(btn => {
+          const oddsSpan = btn.querySelector('[data-id="odds-value"] span')
+          const odds = oddsSpan ? parseFloat(oddsSpan.textContent?.trim() || '0') : 0
+          if (odds === 0) return
+          const spans = Array.from(btn.querySelectorAll('span'))
+          let name = ''
+          for (let i = spans.length - 1; i >= 0; i--) {
+            const text = spans[i].textContent?.trim()
+            if (text && !text.match(/^\d+(\.\d+)?$/)) {
+              name = text
+              break
+            }
+          }
+          if (!name) return
+          let market = ''
+          let parent = btn.parentElement
+          while (parent && !market) {
+            const candidate = parent.querySelector('.EC_Go, .market-group__title')
+            if (candidate) market = candidate.textContent?.trim() || ''
+            parent = parent.parentElement
+          }
+          if (!market) market = 'General'
+          // Skip outcomes that are actually market titles (e.g., "Correct score by maps")
+          if (market === 'General' && name.length > 10 && name.match(/[A-Za-z]/)) return
+          outcomes.push({ market, name, odds })
+        })
+        return outcomes
+      })
 
-      const marketKeywords = [
-        'Full-time result', 'Double chance', 'Both teams to score', 'Correct score',
-        'Total', 'Winner', 'Handicap', 'Match winner', 'Result and total',
-        'Exact number', 'To qualify', 'Penalty', 'Goal line', 'Corners',
-        'Toss winner', 'Toss and match winner', 'First boundary', 'Ball 1 of match',
-        'total runs', 'Innings', 'to score a goal',
-        'To win including overtime', '3-way betting', 'Total', 'Handicap',
-        'Cleveland Cavaliers total', 'Atlanta Hawks total', 'Total. Even/Odd',
-        'Moneyline', 'Point spread', 'Total points', 'Quarter winner', 'Half winner'
-      ]
+      let markets: any[] = []
+      if (oddsData.length > 0) {
+        const groups = new Map<string, { name: string; odds: number; order: number }[]>()
+        oddsData.forEach(item => {
+          if (!groups.has(item.market)) groups.set(item.market, [])
+          const arr = groups.get(item.market)!
+          arr.push({ name: item.name, odds: item.odds, order: arr.length })
+        })
+        markets = Array.from(groups.entries()).map(([name, outcomes]) => ({ name, outcomes }))
+      }
 
-      const ignoredMarkets = new Set([
-        'All', 'Main', 'Match', 'Sessions', 'Overs', 'Players',
-        'Special offers', 'Parlays', 'Bet Builder'
-      ])
+      // Fallback text parser if data-anchor fails
+      if (markets.length === 0) {
+        const text = await page.evaluate(() => document.body.innerText)
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
 
-      const outcomesRaw: { market: string; name: string; odds: number }[] = []
-      let currentMarket = 'General'
+        const marketKeywords = [
+          'Full-time result', 'Double chance', 'Both teams to score', 'Correct score',
+          'Total', 'Winner', 'Handicap', 'Match winner', 'Result and total',
+          'Exact number', 'To qualify', 'Penalty', 'Goal line', 'Corners',
+          'Toss winner', 'Toss and match winner', 'First boundary', 'Ball 1 of match',
+          'total runs', 'Innings', 'to score a goal',
+          'To win including overtime', '3-way betting', 'Handicap by maps',
+          'Total by maps', 'Correct score by maps', 'Winner. Map 1', 'Winner. Map 2', 'Winner. Map 3',
+          'Handicap. Map 1', 'Total. Map 1', 'Total (maps). Even/Odd', 'Moneyline', 'Point spread'
+        ]
 
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]
+        const ignored = new Set(['All', 'Main', 'Match', 'Sessions', 'Overs', 'Players', 'Special offers', 'Parlays', 'Bet Builder'])
+        const outcomesRaw: { market: string; name: string; odds: number }[] = []
+        let currentMarket = 'General'
 
-        if (ignoredMarkets.has(line) || line.toLowerCase().includes('bet builder')) {
-          continue
-        }
-
-        const isMarket = marketKeywords.some(kw => line.toLowerCase().includes(kw.toLowerCase())) ||
-                         (line.length > 5 && line.match(/[A-Za-z]/) && !line.match(/^\d+(\.\d+)?$/))
-
-        if (isMarket) {
-          currentMarket = line
-          continue
-        }
-
-        if (line.match(/^\d+(\.\d+)?$/)) {
-          const odds = parseFloat(line)
-          if (odds > 0 && odds < 100) {
-            if (i+1 < lines.length) {
-              const name = lines[i+1]
-              if (name && !name.match(/^\d+(\.\d+)?$/)) {
-                outcomesRaw.push({ market: currentMarket, name, odds })
-                i++
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i]
+          if (ignored.has(line) || line.toLowerCase().includes('bet builder')) continue
+          const isMarket = marketKeywords.some(kw => line.toLowerCase().includes(kw.toLowerCase())) ||
+                           (line.length > 5 && line.match(/[A-Za-z]/) && !line.match(/^\d+(\.\d+)?$/))
+          if (isMarket) {
+            currentMarket = line
+            continue
+          }
+          if (line.match(/^\d+(\.\d+)?$/)) {
+            const odds = parseFloat(line)
+            if (odds > 0 && odds < 100) {
+              if (i+1 < lines.length) {
+                const name = lines[i+1]
+                if (name && !name.match(/^\d+(\.\d+)?$/)) {
+                  outcomesRaw.push({ market: currentMarket, name, odds })
+                  i++
+                }
               }
             }
           }
         }
+
+        const groups = new Map<string, { name: string; odds: number; order: number }[]>()
+        outcomesRaw.forEach(item => {
+          if (!groups.has(item.market)) groups.set(item.market, [])
+          const arr = groups.get(item.market)!
+          arr.push({ name: item.name, odds: item.odds, order: arr.length })
+        })
+        markets = Array.from(groups.entries()).map(([name, outcomes]) => ({ name, outcomes }))
       }
 
-      if (outcomesRaw.length === 0) throw new Error('No odds found')
-
-      const marketsMap = new Map<string, { name: string; odds: number; order: number }[]>()
-      outcomesRaw.forEach(item => {
-        if (!marketsMap.has(item.market)) marketsMap.set(item.market, [])
-        const arr = marketsMap.get(item.market)!
-        arr.push({ name: item.name, odds: item.odds, order: arr.length })
-      })
-      const markets = Array.from(marketsMap.entries()).map(([name, outcomes]) => ({ name, outcomes }))
+      if (markets.length === 0) throw new Error('No odds found')
 
       const baseUrl = 'https://pari-betting.com'
       const homeImgFull = teams.homeImg ? (teams.homeImg.startsWith('http') ? teams.homeImg : baseUrl + teams.homeImg) : ''
       const awayImgFull = teams.awayImg ? (teams.awayImg.startsWith('http') ? teams.awayImg : baseUrl + teams.awayImg) : ''
 
+      // Take first 5 markets
       const events = markets.slice(0, 5).map((market, idx) => ({
         name: market.name,
         isFirstFastOption: idx === 0,
