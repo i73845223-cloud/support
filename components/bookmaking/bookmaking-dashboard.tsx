@@ -49,12 +49,28 @@ type Book = Omit<BaseBook, 'status'> & {
   status: 'ACTIVE' | 'INACTIVE' | 'COMPLETED' | 'SETTLED' | 'CANCELLED'
 }
 
+const CATEGORIES = [
+  'Cricket',
+  'Football',
+  'Kabaddi',
+  'Tennis',
+  'Hockey',
+  'Badminton',
+  'Basketball',
+  'Boxing',
+  'UFC',
+  'MMA',
+  'Esports',
+  'Other'
+]
+
 const ITEMS_PER_PAGE = 10
 
 export default function AdminBookmakingDashboard() {
   const [books, setBooks] = useState<Book[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
   const [hideNoStakes, setHideNoStakes] = useState(true)
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined)
@@ -89,7 +105,7 @@ export default function AdminBookmakingDashboard() {
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [statusFilter, searchQuery, hideNoStakes, dateFrom, dateTo])
+  }, [statusFilter, categoryFilter, searchQuery, hideNoStakes, dateFrom, dateTo])
 
   const fetchBooks = async () => {
     try {
@@ -183,12 +199,9 @@ export default function AdminBookmakingDashboard() {
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      // case 'ACTIVE': return 'default'
       case 'LIVE': return 'default'
       case 'UPCOMING': return 'secondary'
-      // case 'INACTIVE': return 'secondary'
       case 'SETTLED': return 'outline'
-      // case 'CANCELLED': return 'destructive'
       default: return 'secondary'
     }
   }
@@ -206,6 +219,8 @@ export default function AdminBookmakingDashboard() {
   const filteredBooks = books.filter(book => {
     const displayStatus = getBookDisplayStatus(book)
     if (statusFilter !== 'ALL' && displayStatus !== statusFilter) return false
+
+    if (categoryFilter !== 'ALL' && book.category !== categoryFilter) return false
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
@@ -308,9 +323,21 @@ export default function AdminBookmakingDashboard() {
             <SelectItem value="ALL">All</SelectItem>
             <SelectItem value="LIVE">Live</SelectItem>
             <SelectItem value="UPCOMING">Upcoming</SelectItem>
-            <SelectItem value="ACTIVE">Active</SelectItem>
+            {/* <SelectItem value="ACTIVE">Active</SelectItem> */}
             <SelectItem value="SETTLED">Settled</SelectItem>
-            <SelectItem value="CANCELLED">Cancelled</SelectItem>
+            {/* <SelectItem value="CANCELLED">Cancelled</SelectItem> */}
+          </SelectContent>
+        </Select>
+
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="w-full sm:w-[160px]">
+            <SelectValue placeholder="Sport" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Sports</SelectItem>
+            {CATEGORIES.map(cat => (
+              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -411,7 +438,7 @@ export default function AdminBookmakingDashboard() {
                         <div className="text-xs sm:text-sm text-muted-foreground">Events</div>
                       </div>
                       <div className="bg-muted p-3 rounded-lg">
-                        <div className="text-xl sm:text-2xl font-bold">₹{totalStake.toFixed(2)}</div>
+                        <div className="text-xl sm:text-2xl font-bold">${totalStake.toFixed(2)}</div>
                         <div className="text-xs sm:text-sm text-muted-foreground">Total Stake</div>
                       </div>
                       <div className="bg-muted p-3 rounded-lg col-span-2 sm:col-span-1">

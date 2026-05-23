@@ -7,13 +7,13 @@ export function cn(...inputs: ClassValue[]) {
 
 export const formatter = {
   format: (amount: number) => {
-    const formattedAmount = new Intl.NumberFormat("en-IN", {
+    const formattedAmount = new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "INR",
+      currency: "USD",
       currencyDisplay: "symbol",
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      maximumFractionDigits: 2,
     }).format(amount);
-    return formattedAmount.replace("₹", "₹ ");
+    return formattedAmount.replace("$", "$ ");
   },
 };

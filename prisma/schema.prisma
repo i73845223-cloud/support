@@ -54,6 +54,8 @@ model User {
   createdBy         User?    @relation("UserCreatedBy", fields: [createdByUserId], references: [id])
   createdUsers      User[]   @relation("UserCreatedBy")
 
+  partnerClickId   String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -408,6 +410,7 @@ model PromoCode {
   userPromoCodes     UserPromoCode[]
   bonuses            Bonus[]
   influencerEarnings InfluencerEarning[]
+  clicks Click[]
 
   createdByUserId   String?
   createdBy         User?    @relation("PromoCodeCreatedBy", fields: [createdByUserId], references: [id])
@@ -550,4 +553,16 @@ model WithdrawalRequest {
   updatedAt     DateTime @updatedAt
 
   @@index([userId])
+}
+
+model Click {
+  id          String    @id @default(uuid())
+  promoCodeId String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  clickId     String?
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([promoCodeId])
 }

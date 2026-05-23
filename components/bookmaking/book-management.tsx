@@ -26,6 +26,7 @@ const CATEGORIES = [
   'Hockey',
   'Rugby',
   'Boxing',
+  'UFC',
   'MMA',
   'Esports',
   'Other'
