@@ -34,7 +34,6 @@ export async function POST(req: NextRequest) {
                text.includes('3-way betting')
       }, { timeout: 30000 })
 
-      // ----- Teams and images (stable) -----
       const teams = await page.evaluate(() => {
         let home = '', away = '', homeImg = '', awayImg = ''
         const teamContainers = Array.from(document.querySelectorAll('[data-id^="competitor-"]'))
@@ -50,7 +49,6 @@ export async function POST(req: NextRequest) {
           homeImg = homeImgEl?.getAttribute('src') || ''
           awayImg = awayImgEl?.getAttribute('src') || ''
         }
-        // Fallback to h1 if needed
         if (!home || !away) {
           const h1 = document.querySelector('h1')?.textContent?.trim() || ''
           const parts = h1.split(' - ')
@@ -71,11 +69,9 @@ export async function POST(req: NextRequest) {
         return { homeTeam: home, awayTeam: away, homeImg, awayImg }
       })
 
-      // ----- Sport and championship (from breadcrumb / navigation bar) -----
       const sportData = await page.evaluate(() => {
         let sport = 'Football'
         let championship = ''
-        // Check event-view-header attribute
         const header = document.querySelector('[data-onboarding^="event-view-header-"]')
         if (header) {
           const headerAttr = header.getAttribute('data-onboarding') || ''
@@ -85,8 +81,13 @@ export async function POST(req: NextRequest) {
           else if (headerAttr.includes('kabaddi')) sport = 'Kabaddi'
           else if (headerAttr.includes('basketball')) sport = 'Basketball'
           else if (headerAttr.includes('eSport')) sport = 'Esports'
+          else if (headerAttr.includes('table')) sport = 'Table Tennis'
+          else if (headerAttr.includes('horse')) sport = 'Horse Racing'
+          else if (headerAttr.includes('boxing')) sport = 'Boxing'
+          else if (headerAttr.includes('mma')) sport = 'MMA'
+          else if (headerAttr.includes('ufc')) sport = 'UFC'
+          else if (headerAttr.includes('baseball')) sport = 'Baseball'
         }
-        // Also check breadcrumb
         const breadcrumbLinks = Array.from(document.querySelectorAll('.seo-kit_styles_items-1V-RbrKxNFUhL2OA a'))
         for (const link of breadcrumbLinks) {
           const text = link.textContent?.toLowerCase() || ''
@@ -97,7 +98,6 @@ export async function POST(req: NextRequest) {
           if (text.includes('basketball')) { sport = 'Basketball'; break }
           if (text.includes('e-sports') || text.includes('e-sport')) { sport = 'Esports'; break }
         }
-        // Championship from breadcrumb
         const breadcrumbItems = Array.from(document.querySelectorAll('.seo-kit_styles_items-1V-RbrKxNFUhL2OA li'))
         for (let i = breadcrumbItems.length - 2; i >= 0; i--) {
           const text = breadcrumbItems[i]?.textContent?.trim()
@@ -113,7 +113,6 @@ export async function POST(req: NextRequest) {
         return { sport, championship }
       })
 
-      // ----- Match time -----
       const timeData = await page.evaluate(() => {
         const dateSpan = document.querySelector('[data-testid="prematch-start-date"]')
         const timeSpan = document.querySelector('[data-testid="prematch-start-time"]')
@@ -135,7 +134,6 @@ export async function POST(req: NextRequest) {
         return startTime
       })
 
-      // ----- Odds extraction using data-anchor -----
       const oddsData = await page.evaluate(() => {
         const outcomes: { market: string; name: string; odds: number }[] = []
         const buttons = document.querySelectorAll('[data-anchor]')
@@ -161,7 +159,6 @@ export async function POST(req: NextRequest) {
             parent = parent.parentElement
           }
           if (!market) market = 'General'
-          // Skip outcomes that are actually market titles (e.g., "Correct score by maps")
           if (market === 'General' && name.length > 10 && name.match(/[A-Za-z]/)) return
           outcomes.push({ market, name, odds })
         })
@@ -179,7 +176,6 @@ export async function POST(req: NextRequest) {
         markets = Array.from(groups.entries()).map(([name, outcomes]) => ({ name, outcomes }))
       }
 
-      // Fallback text parser if data-anchor fails
       if (markets.length === 0) {
         const text = await page.evaluate(() => document.body.innerText)
         const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
@@ -237,7 +233,6 @@ export async function POST(req: NextRequest) {
       const homeImgFull = teams.homeImg ? (teams.homeImg.startsWith('http') ? teams.homeImg : baseUrl + teams.homeImg) : ''
       const awayImgFull = teams.awayImg ? (teams.awayImg.startsWith('http') ? teams.awayImg : baseUrl + teams.awayImg) : ''
 
-      // Take first 5 markets
       const events = markets.slice(0, 5).map((market, idx) => ({
         name: market.name,
         isFirstFastOption: idx === 0,
