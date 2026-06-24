@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: NextRequest) {
   try {
     const { url } = await req.json()
-    if (!url || !url.includes('pari-betting.com/en/event')) {
+    if (!url || !url.includes('parimatch123.com/en/event')) {
       return NextResponse.json({ error: 'Invalid Parimatch event URL' }, { status: 400 })
     }
 
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
           'Handicap. Map 1', 'Total. Map 1', 'Total (maps). Even/Odd', 'Moneyline', 'Point spread'
         ]
 
-        const ignored = new Set(['All', 'Main', 'Match', 'Sessions', 'Overs', 'Players', 'Special offers', 'Parlays', 'Bet Builder'])
+        const ignored = new Set(['All', 'Main', 'Match', 'Sessions', 'Overs', 'Players', 'Special offers', 'Parlays', 'Bet Builder', 'Early Payout', 'Over', 'Under', '0% margin odds'])
         const outcomesRaw: { market: string; name: string; odds: number }[] = []
         let currentMarket = 'General'
 
@@ -233,7 +233,7 @@ export async function POST(req: NextRequest) {
 
       if (markets.length === 0) throw new Error('No odds found')
 
-      const baseUrl = 'https://pari-betting.com'
+      const baseUrl = 'https://parimatch123.com'
       const homeImgFull = teams.homeImg ? (teams.homeImg.startsWith('http') ? teams.homeImg : baseUrl + teams.homeImg) : ''
       const awayImgFull = teams.awayImg ? (teams.awayImg.startsWith('http') ? teams.awayImg : baseUrl + teams.awayImg) : ''
 
