@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: NextRequest) {
   try {
     const { url } = await req.json()
-    if (!url || !url.includes('parimatch123.com/en/event')) {
+    if (!url || !url.includes('parimatchs123.com/en/event')) {
       return NextResponse.json({ error: 'Invalid Parimatch event URL' }, { status: 400 })
     }
 
@@ -229,7 +229,7 @@ export async function POST(req: NextRequest) {
 
       if (markets.length === 0) throw new Error('No odds found')
 
-      const baseUrl = 'https://parimatch123.com'
+      const baseUrl = 'https://parimatchs123.com'
       const homeImgFull = teams.homeImg ? (teams.homeImg.startsWith('http') ? teams.homeImg : baseUrl + teams.homeImg) : ''
       const awayImgFull = teams.awayImg ? (teams.awayImg.startsWith('http') ? teams.awayImg : baseUrl + teams.awayImg) : ''
 
